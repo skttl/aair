@@ -1,13 +1,15 @@
 {
-  "name": "cli-ai-code-review",
-  "version": "0.0.7",
-  "description": "CLI tool to review code using OpenAI GPT",
+  "name": "auto-ai-review",
+  "version": "1.1.1",
+  "description": "AI-powered code review tool",
   "type": "module",
-  "main": "code-review.js",
-  "bin": "./dist/cli.js",
+  "main": "dist/cli.js",
+  "bin": {
+    "aair": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
-    "code-review": "npx tsx src/cli.ts"
+    "start": "node dist/cli.js"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -19,19 +21,20 @@
     "ai"
   ],
   "author": {
-    "name": "Chris Moyer",
-    "email": "kopertop@gmail.com"
+    "name": "Søren Kottal",
+    "email": "snielsen43@gmail.com"
   },
   "license": "THE UNLICENSE",
-  "devDependencies": {
-    "@tsconfig/node16": "^16.1.1",
-    "@types/node": "^20.7.0",
-    "tsx": "^3.13.0",
-    "typescript": "^5.2.2"
-  },
   "dependencies": {
     "cli-markdown": "^3.0.5",
-    "openai": "^4.10.0",
-    "simple-git": "^3.20.0"
+    "commander": "^11.1.0",
+    "openai": "^4.24.1",
+    "simple-git": "^3.22.0"
+  },
+  "devDependencies": {
+    "@tsconfig/node16": "^16.1.1",
+    "@types/node": "^20.10.6",
+    "tsx": "^3.13.0",
+    "typescript": "^5.3.3"
   }
 }

@@ -44,6 +44,26 @@ aair branch feature-branch
 aair branch feature-branch develop
 ```
 
+### Commit Message Generation
+
+Generate AI-powered commit messages for your staged changes:
+
+```bash
+aair commit
+```
+
+The tool will:
+1. Generate a commit message following best practices
+2. Show you the suggested message
+3. Allow you to edit it if needed (press Enter twice to finish editing)
+4. Ask for confirmation before creating the commit
+
+The generated commit messages follow best practices:
+- Brief summary line (max 50 chars)
+- Detailed bullet points of key changes
+- Focus on WHAT and WHY, not HOW
+- Use imperative mood ("Add feature" not "Added feature")
+
 ### Settings Management
 
 The tool supports customizable settings that are stored in `~/.aair-settings.json`. You can manage these settings using the following commands:
@@ -69,6 +89,11 @@ Default: `gpt-4`
 aair settings --prompt "Your custom review prompt"
 ```
 
+#### Customize Commit Message Prompt
+```bash
+aair settings --commit-prompt "Your custom commit message prompt"
+```
+
 You can combine multiple settings in a single command:
 ```bash
 aair settings --model gpt-4-turbo-preview --prompt "Your custom prompt"
@@ -78,7 +103,8 @@ aair settings --model gpt-4-turbo-preview --prompt "Your custom prompt"
 
 Default settings:
 - Model: `gpt-4`
-- Prompt: Basic code review prompt focusing on TypeScript repositories
+- Prompt: Basic code review prompt focusing on code quality
+- Commit Prompt: Generates conventional commit messages with detailed descriptions
 - API Key: Loaded from settings or environment variable `OPENAI_API_KEY`
 
 All settings are stored securely in `~/.aair-settings.json`.
@@ -112,9 +138,22 @@ aair branch feature/new-feature develop
 aair branch pr-123 main
 ```
 
-4. Update settings:
+4. Generate commit messages:
+```bash
+# Stage your changes
+git add .
+
+# Generate commit message
+aair commit
+
+```
+
+5. Update settings:
 ```bash
 # Set API key
 aair settings --key your-api-key
-aair settings --model gpt-4-turbo-preview --prompt "Focus on security issues"
+
+# Change model and prompts
+aair settings --model gpt-4-turbo-preview --commit-prompt "Focus on conventional commits"
+
 ```

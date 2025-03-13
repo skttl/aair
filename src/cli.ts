@@ -11,6 +11,7 @@ import { Settings } from './types.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createInterface } from 'readline/promises';
 
 const settingsManager = new SettingsManager();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,7 @@ async function getPackageVersion(): Promise<string> {
         return packageJson.version;
     } catch (error) {
         console.error('Warning: Could not read package version:', error);
-        return '1.1.0'; // Fallback version
+        return '1.1.1'; // Fallback version
     }
 }
 
@@ -53,6 +54,28 @@ async function getDiff(files?: string[], sourceBranch?: string, targetBranch?: s
     }
 }
 
+async function getOpenAIResponse(prompt: string, content: string, model: string, apiKey?: string): Promise<string> {
+    const openai = new OpenAI({
+        apiKey: apiKey || process.env.OPENAI_API_KEY,
+    });
+
+    const chatCompletion = await openai.chat.completions.create({
+        messages: [
+            {
+                role: 'system',
+                content: prompt,
+            },
+            {
+                role: 'user',
+                content,
+            },
+        ],
+        model,
+    });
+
+    return chatCompletion.choices[0]?.message?.content || '';
+}
+
 async function reviewCode(diff: string) {
     const settings = await settingsManager.loadSettings();
     if (!settings.openaiApiKey && !process.env.OPENAI_API_KEY) {
@@ -67,29 +90,85 @@ async function reviewCode(diff: string) {
 
     console.log('Reviewing changes...\n');
 
-    const openai = new OpenAI({
-        apiKey: settings.openaiApiKey || process.env.OPENAI_API_KEY,
-    });
+    const response = await getOpenAIResponse(settings.prompt, diff, settings.model, settings.openaiApiKey);
+    
+    if (response) {
+        console.log('--------------------------------------------------------------');
+        console.log(cliMd(response));
+        console.log('--------------------------------------------------------------\n');
+    }
+}
 
-    const chatCompletion = await openai.chat.completions.create({
-        messages: [
-            {
-                role: 'system',
-                content: settings.prompt,
-            },
-            {
-                role: 'user',
-                content: diff,
-            },
-        ],
-        model: settings.model,
-    });
+async function generateCommitMessage(diff: string) {
+    const settings = await settingsManager.loadSettings();
+    if (!settings.openaiApiKey && !process.env.OPENAI_API_KEY) {
+        console.error('Error: OpenAI API key not found. Please set it using:\naair settings --key YOUR_API_KEY');
+        process.exit(1);
+    }
 
-    for (const choice of chatCompletion.choices) {
-        if (choice.message.content) {
-            console.log('--------------------------------------------------------------');
-            console.log(cliMd(choice.message.content));
-            console.log('--------------------------------------------------------------\n');
+    if (!diff.length) {
+        console.log('No staged changes to generate commit message for');
+        return;
+    }
+
+    console.log('Generating commit message...\n');
+
+    const response = await getOpenAIResponse(settings.commitPrompt, diff, settings.model, settings.openaiApiKey);
+    
+    if (response) {
+        console.log('Suggested commit message:\n');
+        console.log('--------------------------------------------------------------');
+        console.log(response);
+        console.log('--------------------------------------------------------------\n');
+
+        const rl = createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        try {
+            // Ask if they want to edit the message
+            const editChoice = await rl.question('Would you like to edit this message? (y/N): ');
+            
+            let finalMessage = response;
+            if (editChoice.toLowerCase() === 'y') {
+                console.log('\nEnter your edited message (press Enter twice to finish):');
+                const lines: string[] = [];
+                let emptyLines = 0;
+                
+                while (emptyLines < 2) {
+                    const line = await rl.question('');
+                    if (line.trim() === '') {
+                        emptyLines++;
+                    } else {
+                        emptyLines = 0;
+                    }
+                    if (emptyLines < 2) {
+                        lines.push(line);
+                    }
+                }
+                
+                finalMessage = lines.join('\n');
+                console.log('\nUpdated commit message:\n');
+                console.log('--------------------------------------------------------------');
+                console.log(finalMessage);
+                console.log('--------------------------------------------------------------\n');
+            }
+
+            // Ask for confirmation
+            const confirmChoice = await rl.question('Create commit with this message? (y/N): ');
+            
+            if (confirmChoice.toLowerCase() === 'y') {
+                const git = simpleGit({
+                    baseDir: process.cwd(),
+                });
+                await git.commit(finalMessage);
+                console.log('\nCommit created successfully!');
+            } else {
+                console.log('\nCommit cancelled. You can run the command again to generate a new message.');
+            }
+        } finally {
+            rl.close();
         }
     }
 }
@@ -131,11 +210,20 @@ async function initCLI() {
         });
 
     program
+        .command('commit')
+        .description('Generate and interactively edit commit message for staged changes')
+        .action(async () => {
+            const diff = await getDiff();
+            await generateCommitMessage(diff);
+        });
+
+    program
         .command('settings')
         .description('Manage settings')
         .option('-k, --key <key>', 'Set OpenAI API key')
         .option('-m, --model <model>', 'Set OpenAI model')
         .option('-p, --prompt <prompt>', 'Set custom review prompt')
+        .option('-c, --commit-prompt <prompt>', 'Set custom commit message prompt')
         .option('-s, --show', 'Show current settings')
         .action(async (options) => {
             if (options.show) {
@@ -153,6 +241,7 @@ async function initCLI() {
             if (options.key) updates.openaiApiKey = options.key;
             if (options.model) updates.model = options.model;
             if (options.prompt) updates.prompt = options.prompt;
+            if (options.commitPrompt) updates.commitPrompt = options.commitPrompt;
 
             if (Object.keys(updates).length > 0) {
                 const settings = await settingsManager.updateSettings(updates);
